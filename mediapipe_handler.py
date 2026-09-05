@@ -9,6 +9,7 @@ import mediapipe as mp
 
 class MediaPipeHandler:
     def __init__(self):
+        self.joint_coordinates_per_hand = []
         if not hasattr(mp, "solutions"):
             raise RuntimeError(
                 "此 MediaPipe 版本不提供 Hands API，"
@@ -23,6 +24,8 @@ class MediaPipeHandler:
 
     def process(self, frame):
         """接收 BGR 影像，在原圖畫上偵測結果並回傳。"""
+        # 每幀更新，避免未偵測到手時留下上一幀的座標。
+        self.joint_coordinates_per_hand = []
         h, w, _ = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
@@ -37,6 +40,7 @@ class MediaPipeHandler:
                     u = int(landmark.x * w)
                     v = int(landmark.y * h)
                     joint_coordinates[joint_id] = (u, v)
+                self.joint_coordinates_per_hand.append(joint_coordinates)
 
                 for joint_id, (u, v) in joint_coordinates.items():
                     label = f"{joint_id}:({u},{v})"
@@ -53,7 +57,6 @@ class MediaPipeHandler:
                             color, thickness, cv2.LINE_AA
                         )
 
-                print(f"Wrist L0: {joint_coordinates[0]}", flush=True)
         return frame
 
     def close(self):
