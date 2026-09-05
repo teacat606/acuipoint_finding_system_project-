@@ -1,0 +1,5 @@
+matplotlib
+mediapipe==0.10.21
+opencv-python
+pandas
+pyserial
