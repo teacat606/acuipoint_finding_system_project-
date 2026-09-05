@@ -6,6 +6,8 @@ import cv2
 
 from camera import Camera
 from hand_direction import calculate_hand_direction
+from wrist_crease_detection import (detect_wrist_crease, draw_wrist_crease,
+                                    render_wrist_crease_debug, print_wrist_crease_debug)
 
 
 CAMERA_INDEX = 0  # 多個相機時，可以改成 1 或 2。
@@ -22,9 +24,12 @@ def main():
         handler = MediaPipeHandler()
         print("請選取影像視窗，按 q 結束。")
         frame_count = 0
+        debug_page = 0
+        debug_windows = set()
 
         while True:
             frame = camera.read()
+            clean_frame = frame.copy()
             frame = handler.process(frame)
             frame_count += 1
             for hand_index, joint_coordinates in enumerate(
@@ -61,8 +66,25 @@ def main():
                         f"Hand angle: {direction['angle']:.1f} deg",
                         flush=True,
                     )
+            active_debug_windows = set()
+            # 使用未標註影像偵測，最後才畫結果，避免骨架干擾或覆蓋紅線。
+            for hand_index, landmarks in enumerate(handler.joint_coordinates_per_hand):
+                crease = detect_wrist_crease(clean_frame, landmarks, track_id=hand_index)
+                debug_name = f"Wrist debug - Hand {hand_index + 1}"
+                active_debug_windows.add(debug_name)
+                cv2.imshow(debug_name, render_wrist_crease_debug(clean_frame, crease, debug_page))
+                print_wrist_crease_debug(crease, f"Frame {frame_count} Hand {hand_index + 1}")
+                draw_wrist_crease(frame, crease, (10, frame.shape[0] - 15 - hand_index * 25))
+            if not handler.joint_coordinates_per_hand:
+                draw_wrist_crease(frame, detect_wrist_crease(clean_frame, None, track_id=0))
+            for name in debug_windows - active_debug_windows:
+                cv2.destroyWindow(name)
+            debug_windows = active_debug_windows
             cv2.imshow(WINDOW_NAME, frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("["), ord("]")):
+                debug_page += 1 if key == ord("]") else -1
+            if key == ord("q"):
                 break
         return 0
     except ImportError as error:
